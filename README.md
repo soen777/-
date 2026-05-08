@@ -3,7 +3,7 @@
 
 > 广东财经大学 · 数据科学与大数据技术（大一）· 暑期实习项目
 
-本项目基于阿里天池公开的淘宝用户行为数据集（约1亿条记录），完成**数据清洗 → 漏斗分析 → 用户分层（RFM+KMeans）→ 商品关联规则挖掘（FP-Growth）→ 销量预测 → 可视化看板**的全流程分析，模拟真实电商数据分析任务。
+本项目基于阿里天池公开的淘宝用户行为数据集（约1亿条记录），完成**数据清洗 → 漏斗分析 → 用户分层（RFM+KMeans）→ 商品关联规则挖掘（FP-Growth）→ 销量预测 → AI 洞察生成 → 可视化看板**的全流程分析，模拟真实电商数据分析任务。
 
 ---
 
@@ -27,6 +27,7 @@
 | 机器学习 | Scikit-learn (KMeans, LinearRegression) |
 | 关联规则 | Mlxtend (FP-Growth) |
 | 可视化 | Matplotlib, Streamlit |
+| AI 洞察 | OpenAI SDK（兼容 DeepSeek / 通义千问 / GLM） |
 | 开发环境 | Jupyter Notebook, VSCode |
 
 ---
@@ -34,20 +35,23 @@
 ## 📁 项目结构
 ```text
 Ecommerce-Analysis-Project/
-├── code/                              # 分析代码（Jupyter Notebook）
-│   ├── 01_data_clean.ipynb            # 数据清洗
+├── code/                              # 分析代码
+│   ├── 01_data_clean.ipynb            # 数据清洗（Pandas）
 │   ├── 02_data_check.ipynb            # 数据质量检查
-│   ├── 03_basic_analysis.ipynb        # 基础分析（漏斗、热销等）
+│   ├── 03_basic_analysis.ipynb        # 漏斗转化 & 基础分析
 │   ├── 04_rfm_kmeans.ipynb            # RFM + KMeans 用户分层
-│   ├── 05_fpgrowth.ipynb              # FP-Growth 关联规则挖掘
-│   └── 06_sales_pred.ipynb            # 销量预测（线性回归）
-├── result/                            # 输出结果
-│   ├── basic_report.csv
-│   ├── rfm_user.csv
-│   ├── fpgrowth_rules.csv
-│   └── daily_user.png
-├── streamlit_app.py                   # Streamlit 交互看板
-├── requirements.txt                   # 依赖包列表
+│   ├── 05_fpgrowth.ipynb              # FP-Growth 商品关联规则
+│   ├── 06_sales_pred.ipynb            # 销量预测（线性回归）
+│   ├── 07_streamlit_app.py            # Streamlit 交互看板
+│   └── llm_insights.py                # AI 洞察生成模块（LLM 驱动）
+├── result/                            # 分析输出与缓存
+│   ├── basic_report.csv               # 漏斗转化数据
+│   ├── rfm_user.csv                   # 用户分层结果
+│   ├── fpgrowth_rules.csv             # 关联规则
+│   ├── sales_pred.csv                 # 销量预测
+│   ├── daily_user.png                 # 日活趋势图
+│   └── insights/                      # AI 洞察缓存
+├── requirements.txt                   # Python 依赖
 └── README.md                          # 项目说明
 
 ---
@@ -57,16 +61,17 @@ Ecommerce-Analysis-Project/
 ### 1. 数据清洗
 - 处理缺失值、重复值，转换时间戳 → 日期/小时
 - 过滤超出日期范围（2017-11-25 ~ 2017-12-03）的数据
-- **最终有效数据**：约 9890 万条
+- **最终有效数据**：约 9891 万条
+- **分析抽样**：为提升计算效率，漏斗/关联规则等环节使用合理抽样
 
 ### 2. 用户行为漏斗分析
 | 行为 | 数量 | 转化率（相对于点击） |
 |------|------|----------------------|
-| 点击（pv） | 89,000,000+ | 100% |
-| 加购 + 收藏 | 约 5,600,000 | ~6.3% |
-| 支付（buy） | 约 1,200,000 | **1.35%** |
+| 点击（pv） | 15,986,274 | 100% |
+| 加购 + 收藏 | 1,505,642 | 9.4% |
+| 支付（buy） | 362,185 | **2.27%** |
 
-> 结论：加购到支付环节流失严重，可针对性优化购物车提示或优惠券策略。
+> 结论：从加购到支付的流失是核心瓶颈，优化购物车提醒和限时优惠可提升转化。
 
 ### 3. RFM + KMeans 用户分层
 - **R**：最后一次购买距今天数（基准日 2017-12-04）
@@ -93,8 +98,18 @@ Ecommerce-Analysis-Project/
 > 提升度 > 1 表示正相关，提升度 38 说明购买前件后购买后件的概率是随机情况的 38 倍，极具推荐价值。
 
 ### 5. 日销量预测（线性回归 + 周末效应）
-- 以日期序号和是否周末为特征，预测次日销量
-- **预测次日销量**：约 342 单（实际值需对比，此处为演示）
+- 以日期序号和是否周末为特征，预测日销量趋势
+- 覆盖 2017-11-25 ~ 2017-12-03 共 9 天数据
+- 模型捕捉周末效应，用于运营排期参考
+
+### 6. AI 业务洞察（LLM 驱动）
+- 基于 DeepSeek / 通义千问 / GLM 等大模型，自动为每个分析模块生成业务解读
+- 支持 OpenAI 兼容接口，可自由切换模型
+- 洞察结果自动缓存，避免重复调用 API
+- 覆盖漏斗分析、用户分层、关联规则、销量预测四个模块
+
+---
+[Streamlit App](https://ecommerce-analysis-project-edc9soik84pcksvbrim6ph.streamlit.app/)
 
 ---
 
